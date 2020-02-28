@@ -9,6 +9,7 @@
 #include "KY-CAD.h"
 #include <htmlhelp.h>
 #include <shlwapi.h>
+#include <shellapi.h>
 
 #define MAX_LOADSTRING 100
 
@@ -173,6 +174,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // 選択されたメニューの解析:
             switch (wmId)
             {
+            case IDM_FEEDBACK:
+                ShellExecute(hWnd, TEXT("open"), TEXT("https://ky-cad.com/ask"), NULL, NULL, SW_SHOWNORMAL);
+                break;
             case IDM_PREVIEW:
                 TogglePreviewMode(hWnd);
                 break;
