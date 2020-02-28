@@ -1,8 +1,14 @@
 ﻿// KY-CAD.cpp : アプリケーションのエントリ ポイントを定義します。
 //
 
+#pragma comment(lib, "htmlhelp")
+#pragma comment(lib, "shlwapi")
+#pragma comment(lib, "version")
+
 #include "framework.h"
 #include "KY-CAD.h"
+#include <htmlhelp.h>
+#include <shlwapi.h>
 
 #define MAX_LOADSTRING 100
 
@@ -10,6 +16,8 @@
 HINSTANCE hInst;                                // 現在のインターフェイス
 WCHAR szTitle[MAX_LOADSTRING];                  // タイトル バーのテキスト
 WCHAR szWindowClass[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
+BOOL m_bPreview;
+
 
 // このコード モジュールに含まれる関数の宣言を転送します:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -54,8 +62,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     return (int) msg.wParam;
 }
-
-
 
 //
 //  関数: MyRegisterClass()
@@ -111,6 +117,31 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    return TRUE;
 }
 
+void TogglePreviewMode(HWND hWnd)
+{
+    static LONG lStyle;
+    static RECT rect;
+    static HMENU hMenu;
+    if (m_bPreview) {
+        SetWindowLong(hWnd, GWL_STYLE, lStyle);
+        SetWindowPos(hWnd, HWND_NOTOPMOST, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED);
+        SetMenu(hWnd, hMenu);
+        m_bPreview = FALSE;
+    }
+    else {
+        GetWindowRect(hWnd, &rect);
+        hMenu = GetMenu(hWnd);
+        SetMenu(hWnd, NULL);
+        lStyle = GetWindowLong(hWnd, GWL_STYLE);
+        SetWindowLong(hWnd, GWL_STYLE, WS_VISIBLE);
+        auto hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
+        GetMonitorInfo(hMonitor, &monitorInfo);
+        SetWindowPos(hWnd, HWND_TOPMOST, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top, monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top, SWP_NOZORDER | SWP_FRAMECHANGED);
+        m_bPreview = TRUE;
+    }
+}
+
 //
 //  関数: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -125,14 +156,37 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+    case WM_MBUTTONDOWN:
+    case WM_XBUTTONDOWN:
+        if (m_bPreview)
+        {
+            TogglePreviewMode(hWnd);
+        }
+        return DefWindowProc(hWnd, message, wParam, lParam);
     case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
             // 選択されたメニューの解析:
             switch (wmId)
             {
+            case IDM_PREVIEW:
+                TogglePreviewMode(hWnd);
+                break;
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+                break;
+            case IDM_HELP:
+                {
+                    TCHAR szHelpFilePath[MAX_PATH];
+                    GetModuleFileName(GetModuleHandle(0), szHelpFilePath, _countof(szHelpFilePath));
+                    PathRemoveFileSpec(szHelpFilePath);
+                    PathAppend(szHelpFilePath, TEXT("help.chm"));
+                    HtmlHelp(hWnd, szHelpFilePath, HH_DISPLAY_TOPIC, 0);
+                }
                 break;
             case IDM_EXIT:
                 DestroyWindow(hWnd);
@@ -166,8 +220,33 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_INITDIALOG:
+        {
+            TCHAR szExePath[MAX_PATH];
+            GetModuleFileName(GetModuleHandle(0), szExePath, _countof(szExePath));
+            DWORD dwDummy;
+            DWORD dwSize = GetFileVersionInfoSize(szExePath, &dwDummy);
+            LPVOID lpData = GlobalAlloc(0, dwSize);
+            if (lpData) {
+                GetFileVersionInfo(szExePath, 0, dwSize, lpData);
+                LPVOID lpBuffer;
+                UINT uSize;
+                if (VerQueryValue(lpData, _T("\\"), &lpBuffer, &uSize)) {
+                    VS_FIXEDFILEINFO* pFileInfo = (VS_FIXEDFILEINFO*)lpBuffer;
+                    TCHAR szStaticText[256];
+                    GetDlgItemText(hDlg, IDC_VERSION, szStaticText, _countof(szStaticText));
+                    TCHAR szWithVersion[256];
+                    wsprintf(szWithVersion, TEXT("%s %d.%d.%d.%d"),
+                        szStaticText,
+                        HIWORD(pFileInfo->dwFileVersionMS),
+                        LOWORD(pFileInfo->dwFileVersionMS),
+                        HIWORD(pFileInfo->dwFileVersionLS),
+                        LOWORD(pFileInfo->dwFileVersionLS));
+                    SetDlgItemText(hDlg, IDC_VERSION, szWithVersion);
+                }
+                GlobalFree(lpData);
+            }
+        }
         return (INT_PTR)TRUE;
-
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
