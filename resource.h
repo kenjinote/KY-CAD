@@ -11,6 +11,7 @@
 #define IDI_KYCAD                       107
 #define IDI_SMALL                       108
 #define IDC_KYCAD                       109
+#define IDC_STATUSBAR                   110
 #define IDR_MAINFRAME                   128
 #define IDC_VERSION                     1000
 #define ID_32773                        32773
@@ -52,6 +53,23 @@
 #define IDM_OPTION                      32812
 #define IDM_HELP                        32813
 #define IDM_FEEDBACK                    32814
+#define ID_32817                        32817
+#define ID_32818                        32818
+#define ID_32819                        32819
+#define ID_32820                        32820
+#define ID_32821                        32821
+#define ID_32822                        32822
+#define ID_32823                        32823
+#define ID_32824                        32824
+#define ID_32825                        32825
+#define ID_32826                        32826
+#define ID_32827                        32827
+#define ID_32828                        32828
+#define ID_32829                        32829
+#define IDM_SHOWSTATUSBAR               32830
+#define ID_32831                        32831
+#define IDM_SHOWGRIDLINE                32832
+#define ID_32833                        32833
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -60,8 +78,8 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        129
-#define _APS_NEXT_COMMAND_VALUE         32817
+#define _APS_NEXT_COMMAND_VALUE         32834
 #define _APS_NEXT_CONTROL_VALUE         1001
-#define _APS_NEXT_SYMED_VALUE           110
+#define _APS_NEXT_SYMED_VALUE           111
 #endif
 #endif
