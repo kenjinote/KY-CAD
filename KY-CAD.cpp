@@ -10,15 +10,76 @@
 #include <htmlhelp.h>
 #include <shlwapi.h>
 #include <shellapi.h>
+#include <vector>
 
 #define MAX_LOADSTRING 100
+#define COLOR_SELECT RGB(255,0,0)
 
 // グローバル変数:
 HINSTANCE hInst;                                // 現在のインターフェイス
 WCHAR szTitle[MAX_LOADSTRING];                  // タイトル バーのテキスト
 WCHAR szWindowClass[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
 BOOL m_bPreview;
+HDC m_hDC;
 
+struct KYPOINT {
+    double x;
+    double y;
+};
+
+class KyObject {
+private:
+    BOOL m_bSelected;
+    BOOL m_bInvalid;
+public:
+    KyObject() : m_bSelected(FALSE), m_bInvalid(FALSE) {}
+    virtual const void Draw() {};
+    virtual const void Delete() { m_bInvalid = TRUE; }
+    virtual const BOOL IsSelected() { return m_bSelected; }
+    virtual const VOID Select() { m_bSelected = TRUE; }
+    virtual const VOID UnSelect() { m_bSelected = FALSE; }
+    virtual const BOOL IsInvalid() { return m_bInvalid; }
+};
+
+class KyPoint : public KyObject {
+private:
+    double m_dX;
+    double m_dY;
+    double m_dWidth;
+    double m_dHeight;
+public:
+    KyPoint(double x, double y) :m_dX(x), m_dY(y) { m_dWidth = 4.0; m_dHeight = 4.0; }
+    const VOID Draw() override {
+        Ellipse(m_hDC, (int)(m_dX - m_dWidth), (int)(m_dY - m_dHeight), (int)(m_dX + m_dWidth), (int)(m_dY + m_dHeight));
+    }
+};
+
+class KyLine : public KyObject {
+private:
+    KYPOINT m_posStart;
+    KYPOINT m_posEnd;
+public:
+    KyLine(KYPOINT start, KYPOINT end) :m_posStart(start), m_posEnd(end) {}
+    const VOID Draw() override {
+        MoveToEx(m_hDC, (int)m_posStart.x, (int)m_posStart.y, 0);
+        LineTo(m_hDC, (int)m_posEnd.x, (int)m_posEnd.y);
+    }
+};
+
+class KyObjectList {
+    std::vector<KyObject*> m_ObjectList;
+public:
+    const VOID Draw(HDC hdc) {
+        m_hDC = hdc;
+        for (auto obj : m_ObjectList) { obj->Draw(); }
+    }
+    VOID InsertObject(KyObject* obj) {
+        m_ObjectList.push_back(obj);
+    }
+    ~KyObjectList() {
+        for (auto obj : m_ObjectList) { delete obj; }
+    }
+};
 
 // このコード モジュールに含まれる関数の宣言を転送します:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -155,8 +216,18 @@ void TogglePreviewMode(HWND hWnd)
 //
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    static KyObjectList * m_pObjectList;
     switch (message)
     {
+    case WM_CREATE:
+        m_pObjectList = new KyObjectList;
+        {
+            KyPoint* obj1 = new KyPoint(100.0, 100.0);
+            m_pObjectList->InsertObject(obj1);
+            KyLine* obj2 = new KyLine(KYPOINT({ 0.0,0.0 }), KYPOINT({ 200.0, 200.0 }));
+            m_pObjectList->InsertObject(obj2);
+        }
+        break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
     case WM_LBUTTONDOWN:
@@ -204,11 +275,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: HDC を使用する描画コードをここに追加してください...
+            m_pObjectList->Draw(hdc);
             EndPaint(hWnd, &ps);
         }
         break;
     case WM_DESTROY:
+        delete m_pObjectList;
         PostQuitMessage(0);
         break;
     default:
