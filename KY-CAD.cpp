@@ -4,6 +4,7 @@
 #pragma comment(lib, "htmlhelp")
 #pragma comment(lib, "shlwapi")
 #pragma comment(lib, "version")
+#pragma comment(lib, "d2d1")
 
 #include "framework.h"
 #include "KY-CAD.h"
@@ -11,6 +12,7 @@
 #include <shlwapi.h>
 #include <shellapi.h>
 #include <vector>
+#include <d2d1.h>
 
 #define MAX_LOADSTRING 100
 #define COLOR_SELECT RGB(255,0,0)
@@ -20,7 +22,9 @@ HINSTANCE hInst;                                // 現在のインターフェ�
 WCHAR szTitle[MAX_LOADSTRING];                  // タイトル バーのテキスト
 WCHAR szWindowClass[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
 BOOL m_bPreview;
-HDC m_hDC;
+ID2D1Factory* pFactory;
+ID2D1HwndRenderTarget* pRenderTarget;
+ID2D1SolidColorBrush* pBrush;
 
 struct KYPOINT {
     double x;
@@ -47,10 +51,14 @@ private:
     double m_dY;
     double m_dWidth;
     double m_dHeight;
+    D2D1_ELLIPSE ellipse;
 public:
-    KyPoint(double x, double y) :m_dX(x), m_dY(y) { m_dWidth = 4.0; m_dHeight = 4.0; }
+    KyPoint(double x, double y) :m_dX(x), m_dY(y) {
+        m_dWidth = 4.0; m_dHeight = 4.0;
+        ellipse = D2D1::Ellipse(D2D1::Point2F((FLOAT)x, (FLOAT)y), (FLOAT)m_dWidth, (FLOAT)m_dHeight);
+    }
     const VOID Draw() override {
-        Ellipse(m_hDC, (int)(m_dX - m_dWidth), (int)(m_dY - m_dHeight), (int)(m_dX + m_dWidth), (int)(m_dY + m_dHeight));
+        pRenderTarget->FillEllipse(ellipse, pBrush);
     }
 };
 
@@ -58,19 +66,18 @@ class KyLine : public KyObject {
 private:
     KYPOINT m_posStart;
     KYPOINT m_posEnd;
+    double m_dWidth = 1.0F;
 public:
     KyLine(KYPOINT start, KYPOINT end) :m_posStart(start), m_posEnd(end) {}
     const VOID Draw() override {
-        MoveToEx(m_hDC, (int)m_posStart.x, (int)m_posStart.y, 0);
-        LineTo(m_hDC, (int)m_posEnd.x, (int)m_posEnd.y);
+        pRenderTarget->DrawLine(D2D1::Point2F((FLOAT)m_posStart.x, (FLOAT)m_posStart.y), D2D1::Point2F((FLOAT)m_posEnd.x, (FLOAT)m_posEnd.y), pBrush, (FLOAT)m_dWidth);
     }
 };
 
 class KyObjectList {
     std::vector<KyObject*> m_ObjectList;
 public:
-    const VOID Draw(HDC hdc) {
-        m_hDC = hdc;
+    const VOID Draw() {
         for (auto obj : m_ObjectList) { obj->Draw(); }
     }
     VOID InsertObject(KyObject* obj) {
@@ -204,6 +211,44 @@ void TogglePreviewMode(HWND hWnd)
     }
 }
 
+HRESULT CreateGraphicsResources(HWND hWnd)
+{
+    HRESULT hr = S_OK;
+    if (pRenderTarget == NULL)
+    {
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+
+        D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
+
+        hr = pFactory->CreateHwndRenderTarget(
+            D2D1::RenderTargetProperties(),
+            D2D1::HwndRenderTargetProperties(hWnd, size),
+            &pRenderTarget);
+
+        if (SUCCEEDED(hr))
+        {
+            hr = pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0), &pBrush);
+        }
+    }
+    return hr;
+}
+
+template <class T> void SafeRelease(T** ppT)
+{
+    if (*ppT)
+    {
+        (*ppT)->Release();
+        *ppT = NULL;
+    }
+}
+
+void DiscardGraphicsResources()
+{
+    SafeRelease(&pRenderTarget);
+    SafeRelease(&pBrush);
+}
+
 //
 //  関数: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -220,6 +265,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_CREATE:
+        if (FAILED(D2D1CreateFactory(
+            D2D1_FACTORY_TYPE_SINGLE_THREADED, &pFactory)))
+        {
+            return -1;  // Fail CreateWindowEx.
+        }
         m_pObjectList = new KyObjectList;
         {
             KyPoint* obj1 = new KyPoint(100.0, 100.0);
@@ -271,16 +321,46 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         break;
+    case WM_SIZE:
+        if (pRenderTarget != NULL)
+        {
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+
+            D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
+
+            pRenderTarget->Resize(size);
+
+            InvalidateRect(hWnd, NULL, FALSE);
+        }
+        break;
     case WM_PAINT:
         {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            m_pObjectList->Draw(hdc);
-            EndPaint(hWnd, &ps);
+            HRESULT hr = CreateGraphicsResources(hWnd);
+            if (SUCCEEDED(hr))
+            {
+                PAINTSTRUCT ps;
+                BeginPaint(hWnd, &ps);
+
+                pRenderTarget->BeginDraw();
+
+                pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+
+                m_pObjectList->Draw();
+
+                hr = pRenderTarget->EndDraw();
+                if (FAILED(hr) || hr == D2DERR_RECREATE_TARGET)
+                {
+                    DiscardGraphicsResources();
+                }
+                EndPaint(hWnd, &ps);
+            }
         }
         break;
     case WM_DESTROY:
         delete m_pObjectList;
+        DiscardGraphicsResources();
+        SafeRelease(&pFactory);
         PostQuitMessage(0);
         break;
     default:
