@@ -343,48 +343,35 @@ BOOL GetStringFromJSON(LPCSTR lpszJson, LPCSTR lpszKey, LPSTR lpszValue, int nSi
     return strlen(lpszValue) > 0;
 }
 
-int CompareVersion(LPCSTR lpszVer1, LPCSTR lpszVer2)
+LONGLONG VersionStringToLL(LPCSTR lpszVer)
 {
-    CHAR szVer1[32];
-    lstrcpyA(szVer1, lpszVer1);
-    CHAR szVer2[32];
-    lstrcpyA(szVer2, lpszVer2);
-    LONGLONG ver1 = 0, ver2 = 0;
-    int nCount;
+    LONGLONG ver = 0;
+    CHAR szVer[32];
+    lstrcpyA(szVer, lpszVer);
     char* cTmp1 = NULL, * cNext1 = NULL;
-    cTmp1 = ::strtok_s(szVer1, ".", &cNext1);
-    nCount = 0;
+    cTmp1 = ::strtok_s(szVer, ".", &cNext1);
+    int nCount = 0;
     while (cTmp1 != NULL)
     {
         LONGLONG n = atoi(cTmp1);
         switch (nCount)
         {
-        case 0: ver1 += (n << 48); break;
-        case 1: ver1 += (n << 32); break;
-        case 2: ver1 += (n << 16); break;
-        case 3: ver1 += n; break;
+        case 0: ver += (n << 48); break;
+        case 1: ver += (n << 32); break;
+        case 2: ver += (n << 16); break;
+        case 3: ver += n; break;
         default: break;
         }
         cTmp1 = ::strtok_s(NULL, ".", &cNext1);
         nCount++;
     }
-    char* cTmp2 = NULL, * cNext2 = NULL;
-    cTmp2 = ::strtok_s(szVer2, ".", &cNext2);
-    nCount = 0;
-    while (cTmp2 != NULL)
-    {
-        LONGLONG n = atoi(cTmp2);
-        switch (nCount)
-        {
-        case 0: ver2 += (n << 48); break;
-        case 1: ver2 += (n << 32); break;
-        case 2: ver2 += (n << 16); break;
-        case 3: ver2 += n; break;
-        default: break;
-        }
-        cTmp2 = ::strtok_s(NULL, ".", &cNext2);
-        nCount++;
-    }
+    return ver;
+}
+
+int CompareVersion(LPCSTR lpszVer1, LPCSTR lpszVer2)
+{
+    const LONGLONG ver1 = VersionStringToLL(lpszVer1);
+    const LONGLONG ver2 = VersionStringToLL(lpszVer2);
     if (ver1 > ver2) return 1;
     if (ver1 < ver2) return -1;
     return 0;
@@ -436,10 +423,10 @@ void CheckUpdate(HWND hWnd)
                         CopyMemory(lpszReturn + dwSize, szBuf, dwRead);
                         dwSize += dwRead;
                     }
-                    CHAR szRemoteVersion[256];
+                    CHAR szRemoteVersion[32];
                     if (GetStringFromJSON((LPCSTR)lpszReturn, "tag_name", szRemoteVersion, _countof(szRemoteVersion)))
                     {
-                        CHAR szLocalVersion[256];
+                        CHAR szLocalVersion[32];
                         GetLocalVersion(szLocalVersion);
                         if (CompareVersion(szRemoteVersion, szLocalVersion) > 0)
                         {
@@ -621,25 +608,12 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     {
     case WM_INITDIALOG:
         {
-            TCHAR szExePath[MAX_PATH];
-            GetModuleFileName(GetModuleHandle(0), szExePath, _countof(szExePath));
-            DWORD dwDummy;
-            DWORD dwSize = GetFileVersionInfoSize(szExePath, &dwDummy);
-            LPVOID lpData = GlobalAlloc(0, dwSize);
-            if (lpData) {
-                GetFileVersionInfo(szExePath, 0, dwSize, lpData);
-                LPVOID lpBuffer;
-                UINT uSize;
-                if (VerQueryValue(lpData, _T("\\"), &lpBuffer, &uSize)) {
-                    VS_FIXEDFILEINFO* pFileInfo = (VS_FIXEDFILEINFO*)lpBuffer;
-                    TCHAR szStaticText[256];
-                    GetDlgItemText(hDlg, IDC_VERSION, szStaticText, _countof(szStaticText));
-                    TCHAR szWithVersion[256];
-                    wsprintf(szWithVersion, TEXT("%s %d.%d.%d.%d"), szStaticText, HIWORD(pFileInfo->dwFileVersionMS), LOWORD(pFileInfo->dwFileVersionMS), HIWORD(pFileInfo->dwFileVersionLS), LOWORD(pFileInfo->dwFileVersionLS));
-                    SetDlgItemText(hDlg, IDC_VERSION, szWithVersion);
-                }
-                GlobalFree(lpData);
-            }
+            CHAR szStaticText[256];
+            GetDlgItemTextA(hDlg, IDC_VERSION, szStaticText, _countof(szStaticText));
+            CHAR szVersion[32];
+            GetLocalVersion(szVersion);
+            lstrcatA(szStaticText, szVersion);
+            SetDlgItemTextA(hDlg, IDC_VERSION, szStaticText);
         }
         return (INT_PTR)TRUE;
     case WM_COMMAND:
