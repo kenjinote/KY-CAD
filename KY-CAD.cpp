@@ -6,6 +6,7 @@
 #pragma comment(lib, "version")
 #pragma comment(lib, "d2d1")
 #pragma comment(lib, "comctl32")
+#pragma comment(lib, "wininet")
 
 #include "framework.h"
 #include "KY-CAD.h"
@@ -15,6 +16,8 @@
 #include <vector>
 #include <d2d1.h>
 #include <commctrl.h>
+#include <wininet.h>
+#include "json11.hpp"
 #include "util.h"
 
 #define MAX_LOADSTRING 100
@@ -330,6 +333,140 @@ void DiscardGraphicsResources()
     SafeRelease(&pGirdBrush);
 }
 
+BOOL GetStringFromJSON(LPCSTR lpszJson, LPCSTR lpszKey, LPSTR lpszValue, int nSizeValue)
+{
+    std::string src(lpszJson);
+    std::string err;
+    json11::Json v = json11::Json::parse(src, err);
+    if (err.size()) return FALSE;
+    strcpy_s(lpszValue, nSizeValue, v[lpszKey].string_value().c_str());
+    return strlen(lpszValue) > 0;
+}
+
+int CompareVersion(LPCSTR lpszVer1, LPCSTR lpszVer2)
+{
+    CHAR szVer1[32];
+    lstrcpyA(szVer1, lpszVer1);
+    CHAR szVer2[32];
+    lstrcpyA(szVer2, lpszVer2);
+    LONGLONG ver1 = 0, ver2 = 0;
+    int nCount;
+    char* cTmp1 = NULL, * cNext1 = NULL;
+    cTmp1 = ::strtok_s(szVer1, ".", &cNext1);
+    nCount = 0;
+    while (cTmp1 != NULL)
+    {
+        LONGLONG n = atoi(cTmp1);
+        switch (nCount)
+        {
+        case 0: ver1 += (n << 48); break;
+        case 1: ver1 += (n << 32); break;
+        case 2: ver1 += (n << 16); break;
+        case 3: ver1 += n; break;
+        default: break;
+        }
+        cTmp1 = ::strtok_s(NULL, ".", &cNext1);
+        nCount++;
+    }
+    char* cTmp2 = NULL, * cNext2 = NULL;
+    cTmp2 = ::strtok_s(szVer2, ".", &cNext2);
+    nCount = 0;
+    while (cTmp2 != NULL)
+    {
+        LONGLONG n = atoi(cTmp2);
+        switch (nCount)
+        {
+        case 0: ver2 += (n << 48); break;
+        case 1: ver2 += (n << 32); break;
+        case 2: ver2 += (n << 16); break;
+        case 3: ver2 += n; break;
+        default: break;
+        }
+        cTmp2 = ::strtok_s(NULL, ".", &cNext2);
+        nCount++;
+    }
+    if (ver1 > ver2) return 1;
+    if (ver1 < ver2) return -1;
+    return 0;
+}
+
+void GetLocalVersion(LPSTR lpszValue)
+{
+    TCHAR szExePath[MAX_PATH];
+    GetModuleFileName(GetModuleHandle(0), szExePath, _countof(szExePath));
+    DWORD dwDummy;
+    DWORD dwSize = GetFileVersionInfoSize(szExePath, &dwDummy);
+    LPVOID lpData = GlobalAlloc(0, dwSize);
+    if (lpData) {
+        GetFileVersionInfo(szExePath, 0, dwSize, lpData);
+        LPVOID lpBuffer;
+        UINT uSize;
+        if (VerQueryValue(lpData, _T("\\"), &lpBuffer, &uSize)) {
+            VS_FIXEDFILEINFO* pFileInfo = (VS_FIXEDFILEINFO*)lpBuffer;
+            wsprintfA(lpszValue, "%d.%d.%d.%d", HIWORD(pFileInfo->dwFileVersionMS), LOWORD(pFileInfo->dwFileVersionMS), HIWORD(pFileInfo->dwFileVersionLS), LOWORD(pFileInfo->dwFileVersionLS));
+        }
+        GlobalFree(lpData);
+    }
+}
+
+void CheckUpdate(HWND hWnd)
+{
+    LPBYTE lpszReturn = 0;
+    DWORD dwSize = 0;
+    const HINTERNET hSession = InternetOpen(TEXT("Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36"), INTERNET_OPEN_TYPE_PRECONFIG, 0, 0, INTERNET_FLAG_NO_COOKIES);
+    if (hSession)
+    {
+        const HINTERNET hConnection = InternetConnect(hSession, TEXT("api.github.com"), INTERNET_DEFAULT_HTTPS_PORT, 0, 0, INTERNET_SERVICE_HTTP, 0, 0);
+        if (hConnection)
+        {
+            const HINTERNET hRequest = HttpOpenRequest(hConnection, TEXT("GET"), TEXT("/repos/kenjinote/ky-cad/releases/latest"), 0, 0, 0, INTERNET_FLAG_SECURE, 0);
+            if (hRequest)
+            {
+                HttpSendRequest(hRequest, 0, 0, 0, 0);
+                lpszReturn = (LPBYTE)GlobalAlloc(GMEM_FIXED, 1);
+                if (lpszReturn) {
+                    DWORD dwRead;
+                    static BYTE szBuf[1024 * 4];
+                    for (;;)
+                    {
+                        if (!InternetReadFile(hRequest, szBuf, (DWORD)sizeof(szBuf), &dwRead) || !dwRead) break;
+                        LPBYTE lpByte = (LPBYTE)GlobalReAlloc(lpszReturn, (SIZE_T)(dwSize + dwRead), GMEM_MOVEABLE);
+                        if (lpByte == NULL) break;
+                        lpszReturn = lpByte;
+                        CopyMemory(lpszReturn + dwSize, szBuf, dwRead);
+                        dwSize += dwRead;
+                    }
+                    CHAR szRemoteVersion[256];
+                    if (GetStringFromJSON((LPCSTR)lpszReturn, "tag_name", szRemoteVersion, _countof(szRemoteVersion)))
+                    {
+                        CHAR szLocalVersion[256];
+                        GetLocalVersion(szLocalVersion);
+                        if (CompareVersion(szRemoteVersion, szLocalVersion) > 0)
+                        {
+                            CHAR szMessage[1024];
+                            wsprintfA(szMessage, "新しいバージョン(%s)が利用可能です。\n\nダウンロードページを表示しますか？", szRemoteVersion);
+                            if (MessageBoxA(hWnd, szMessage, "更新プログラムの確認", MB_YESNO) == IDYES)
+                            {
+                                CHAR szUrl[1024];
+                                GetStringFromJSON((LPCSTR)lpszReturn, "html_url", szUrl, _countof(szUrl));
+                                ShellExecuteA(hWnd, "open", szUrl, NULL, NULL, SW_SHOWNORMAL);
+                            }
+                        }
+                        else
+                        {
+                            MessageBoxA(hWnd, "新しい更新プログラムはありません。", "更新プログラムの確認", 0);
+                        }
+                    }
+                    GlobalFree(lpszReturn);
+                }
+                InternetCloseHandle(hRequest);
+            }
+            InternetCloseHandle(hConnection);
+        }
+        InternetCloseHandle(hSession);
+    }
+}
+
 //
 //  関数: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -395,6 +532,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // 選択されたメニューの解析:
             switch (wmId)
             {
+            case IDM_UPDATE:
+                CheckUpdate(hWnd);
+                break;
             case IDM_SHOWGRIDLINE:
                 ToggleShowGridLine(hWnd);
                 break;

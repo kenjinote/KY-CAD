@@ -154,12 +154,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
+    <ClInclude Include="json11.hpp" />
     <ClInclude Include="KY-CAD.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="json11.cpp" />
     <ClCompile Include="KY-CAD.cpp" />
     <ClCompile Include="util.cpp" />
   </ItemGroup>
