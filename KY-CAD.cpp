@@ -445,7 +445,7 @@ void CheckUpdate(HWND hWnd)
                         {
                             CHAR szMessage[1024];
                             wsprintfA(szMessage, "新しいバージョン(%s)が利用可能です。\n\nダウンロードページを表示しますか？", szRemoteVersion);
-                            if (MessageBoxA(hWnd, szMessage, "更新プログラムの確認", MB_YESNO) == IDYES)
+                            if (MessageBoxA(hWnd, szMessage, "更新プログラムの確認", MB_YESNO | MB_ICONINFORMATION) == IDYES)
                             {
                                 CHAR szUrl[1024];
                                 GetStringFromJSON((LPCSTR)lpszReturn, "html_url", szUrl, _countof(szUrl));
@@ -454,7 +454,7 @@ void CheckUpdate(HWND hWnd)
                         }
                         else
                         {
-                            MessageBoxA(hWnd, "新しい更新プログラムはありません。", "更新プログラムの確認", 0);
+                            MessageBoxA(hWnd, "新しい更新プログラムはありません。", "更新プログラムの確認", MB_ICONINFORMATION);
                         }
                     }
                     GlobalFree(lpszReturn);
