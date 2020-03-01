@@ -70,6 +70,8 @@
 #define ID_32831                        32831
 #define IDM_SHOWGRIDLINE                32832
 #define ID_32833                        32833
+#define ID_32834                        32834
+#define IDM_UPDATE                      32835
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -78,7 +80,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        129
-#define _APS_NEXT_COMMAND_VALUE         32834
+#define _APS_NEXT_COMMAND_VALUE         32836
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           111
 #endif
