@@ -1,5 +1,4 @@
-﻿
-#pragma comment(lib, "htmlhelp")
+﻿#pragma comment(lib, "htmlhelp")
 #pragma comment(lib, "shlwapi")
 #pragma comment(lib, "version")
 #pragma comment(lib, "d2d1")
