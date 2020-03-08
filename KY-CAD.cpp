@@ -1,6 +1,4 @@
-﻿// KY-CAD.cpp : アプリケーションのエントリ ポイントを定義します。
-//
-
+﻿
 #pragma comment(lib, "htmlhelp")
 #pragma comment(lib, "shlwapi")
 #pragma comment(lib, "version")
